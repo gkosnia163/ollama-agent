@@ -37,10 +37,22 @@ print_every = 100
 # ΕΛΕΓΧΟΣ & ΕΓΚΑΤΑΣΤΑΣΗ OLLAMA
 if not shutil.which("ollama"):
     print("Το Ollama δεν βρέθηκε. Γίνεται εγκατάσταση...")
-    # Εγκατάσταση zstd (απαραίτητο για το colab extraction)
-    subprocess.run(["sudo", "apt-get", "install", "-y", "zstd"], check=True)
-    # Εγκατάσταση Ollama
-    subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
+    if sys.platform.startswith("win"):
+        print("Εντοπίστηκαν Windows. Προσπάθεια εγκατάστασης μέσω winget...")
+        try:
+            subprocess.run(["winget", "install", "Ollama.Ollama"], check=True)
+        except subprocess.CalledProcessError:
+            print("Η εγκατάσταση απέτυχε. Παρακαλώ εγκαταστήστε το χειροκίνητα από https://ollama.com/download/windows")
+    elif sys.platform.startswith("darwin"):
+        print("Εντοπίστηκε macOS. Προσπάθεια εγκατάστασης...")
+        subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
+    else:
+        # Linux
+        # Εγκατάσταση zstd (απαραίτητο για το colab extraction)
+        if shutil.which("apt-get"):
+            subprocess.run(["sudo", "apt-get", "install", "-y", "zstd"], check=True)
+        # Εγκατάσταση Ollama
+        subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
 else:
     print("✓ Το Ollama binary είναι ήδη εγκατεστημένο.")
 

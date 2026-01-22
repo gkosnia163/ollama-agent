@@ -103,6 +103,8 @@ def assign_repair_crew(node_ids: List[str], crew_ids: List[str]) -> Dict[str, st
 # ========================================
 # 3 ACTUAL LLM, cognitive engineer:
 # Χρήση πραγματικού LLM μέσω Ollama API / ώστε να τρέχουμε μικρά llm (2-4b parametres) για τον agent
+# ========================================
+
 import ollama
 
 def llm_call(prompt: str, memory: dict) -> str:
