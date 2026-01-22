@@ -1,0 +1,9 @@
+{
+    "nodes": {
+      "Node_Main_Relay": {"status": "Broken", "type": "Telecom", "population_affected": 10000, "criticality": "High"}
+    },
+    "crews": {
+      "Crew_Alpha": {"status": "Busy", "specialty": "General"},
+      "Crew_Beta": {"status": "Busy", "specialty": "Electrical"}
+    }
+  }

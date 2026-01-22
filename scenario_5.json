@@ -1,0 +1,12 @@
+{
+    "nodes": {
+      "Node_1": {"status": "Broken", "type": "Power", "population_affected": 80000, "criticality": "Critical"},
+      "Node_2": {"status": "Broken", "type": "Water", "population_affected": 10000, "criticality": "High"},
+      "Node_3": {"status": "Broken", "type": "Telecom", "population_affected": 500, "criticality": "Low"},
+      "Node_4": {"status": "Broken", "type": "Power", "population_affected": 20000, "criticality": "High"}
+    },
+    "crews": {
+      "Crew_A": {"status": "Available", "specialty": "General"},
+      "Crew_B": {"status": "Available", "specialty": "General"}
+    }
+  }

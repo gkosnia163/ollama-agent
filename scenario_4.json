@@ -1,0 +1,10 @@
+{
+    "nodes": {
+      "Node_A": {"status": "Operational", "type": "Water", "population_affected": 500, "criticality": "Low"},
+      "Node_B": {"status": "Operational", "type": "Power", "population_affected": 1000, "criticality": "Medium"}
+    },
+    "crews": {
+      "Crew_Alpha": {"status": "Available", "specialty": "General"}
+    }
+  }
+  
