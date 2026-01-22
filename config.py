@@ -12,23 +12,20 @@ if __name__ == '__main__':
 seed = "1407931694"
 assigned_domain = "Infrastructure Failure Management Agent"
 base_path = "/Users/kostasniafas/Library/CloudStorage/GoogleDrive-dit21140@go.uop.gr/My Drive/Agent"
-runs_path = os.path.join(base_path, "/runs")
+runs_path = os.path.join(base_path, "runs")
 
-# Δημιουργία φακέλου runs αν δεν υπάρχει
-if os.path.exists(base_path):
-    if not os.path.exists(runs_path):
-        os.makedirs(runs_path)
-        print(f"Created runs directory: {runs_path}")
-else:
-    print(f"Warning: Base path {base_path} not found. Runs folder not created there.")
-
-#για να δεί άμα το path υπάρχει πριν προχωρήσει
-if not os.path.exists(base_path):
+# Δημιουργία φακέλου runs (και του base_path αν λείπει)
+try:
+    os.makedirs(runs_path, exist_ok=True)
     if __name__ == '__main__':
-        print(f"Error: Το path δεν βρέθηκε: {base_path}")
-else:
+        print(f"✓ Path found/created: {runs_path}")
+except OSError:
+    # Fallback σε local αν αποτύχει (π.χ. δεν υπάρχει το drive)
+    base_path = os.getcwd()
+    runs_path = os.path.join(base_path, "runs")
+    os.makedirs(runs_path, exist_ok=True)
     if __name__ == '__main__':
-        print(f"Path found: {base_path}")
+        print(f"Warning: Drive path failed. Using local: {runs_path}")
 
 seed_int = int(seed)
 print_every = 100
@@ -43,15 +40,12 @@ if not shutil.which("ollama"):
             subprocess.run(["winget", "install", "Ollama.Ollama"], check=True)
         except subprocess.CalledProcessError:
             print("Η εγκατάσταση απέτυχε. Παρακαλώ εγκαταστήστε το χειροκίνητα από https://ollama.com/download/windows")
-    elif sys.platform.startswith("darwin"):
-        print("Εντοπίστηκε macOS. Προσπάθεια εγκατάστασης...")
-        subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
-    else:
-        # Linux
-        # Εγκατάσταση zstd (απαραίτητο για το colab extraction)
-        if shutil.which("apt-get"):
+    elif sys.platform.startswith("darwin") or sys.platform.startswith("linux"):
+        print("Εντοπίστηκε macOS/Linux. Προσπάθεια εγκατάστασης...")
+        # Εγκατάσταση zstd για Linux (αν υπάρχει apt-get - π.χ. Colab)
+        if sys.platform.startswith("linux") and shutil.which("apt-get"):
             subprocess.run(["sudo", "apt-get", "install", "-y", "zstd"], check=True)
-        # Εγκατάσταση Ollama
+        # Εγκατάσταση Ollama με curl
         subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
 else:
     print("✓ Το Ollama binary είναι ήδη εγκατεστημένο.")

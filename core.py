@@ -31,8 +31,6 @@ WORLD_STATE = {
 # ==========================================
 # 2. TOOLS DEFINITION (Εργαλεία)
 # ==========================================
-# Υλοποίηση των 3 υποχρεωτικών εργαλείων με Type Hints και Docstrings.
-# [cite: 722-728, 930-935]
 
 def detect_failure_nodes() -> List[str]:
     """
@@ -65,14 +63,8 @@ def estimate_impact(node_id: str) -> Dict[str, Union[str, int]]:
     }
 
 def assign_repair_crew(node_ids: List[str], crew_ids: List[str]) -> Dict[str, str]:
-    """
-    Assigns specific crews to specific nodes for repair.
-    Args:
-        node_ids: List of node IDs to repair.
-        crew_ids: List of crew IDs to assign (must map 1-to-1 with nodes).
-    Returns:
-        dict: A status report of the assignments (Success/Failure).
-    """
+    
+    """Assigns specific crews to specific nodes for repair."""
     results = {}
 
     # Validation logic (Simple 1-to-1 mapping for simulation)
@@ -86,14 +78,13 @@ def assign_repair_crew(node_ids: List[str], crew_ids: List[str]) -> Dict[str, st
         node = WORLD_STATE["nodes"].get(n_id)
         crew = WORLD_STATE["crews"].get(c_id)
 
-        if not node or not crew:
+        if n_id not in node or not crew:
             results[f"{n_id}-{c_id}"] = "Failed: Invalid ID"
             continue
 
-        if crew["status"] != "Available":
+        if WORLD_STATE["crews"][c_id]["status"] != "Available":
             results[f"{n_id}-{c_id}"] = f"Failed: {c_id} is Busy"
         else:
-            # Execute Assignment (Update Global State)
             WORLD_STATE["nodes"][n_id]["status"] = "Repairing"
             WORLD_STATE["crews"][c_id]["status"] = "Busy"
             results[f"{n_id}-{c_id}"] = "Success: Crew dispatched"
@@ -104,15 +95,17 @@ def assign_repair_crew(node_ids: List[str], crew_ids: List[str]) -> Dict[str, st
 # 3 ACTUAL LLM, cognitive engineer:
 # Χρήση πραγματικού LLM μέσω Ollama API / ώστε να τρέχουμε μικρά llm (2-4b parametres) για τον agent
 # ========================================
-
 import ollama
 
-def llm_call(prompt: str, memory: dict) -> str:
-    """Calls the local Ollama model (llama3.2:1b) to make a decision."""
+def llm_call(system_prompt: str, user_context: str) -> str:
+    """Calls the Ollama model with separate System and User messages."""    
     try:
         response = ollama.chat(
             model='llama3.2:1b',
-            messages=[{'role': 'user', 'content': prompt}],
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_context}
+            ],
             format='json', # Force JSON output
             options={'temperature': 0.1} # Low temperature for more deterministic actions
         )
