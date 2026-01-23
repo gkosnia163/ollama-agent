@@ -1,0 +1,16 @@
+{
+    "nodes": {
+        "Node_Water_Pump_A": {"status": "Broken", "type": "Water", "population_affected": 5000, "criticality": "High"},
+        "Node_Server_B": {"status": "Operational", "type": "Internet", "population_affected": 200, "criticality": "Low"},
+        "Node_Power_Substation_C": {"status": "Broken", "type": "Power", "population_affected": 15000, "criticality": "Critical"},
+        "Node_Relay_D": {"status": "Operational", "type": "Telecom", "population_affected": 1000, "criticality": "Medium"},
+        "Node_Hospital_Generator": {"status": "Broken", "type": "Power", "population_affected": 3000, "criticality": "Critical"},
+        "Node_Water_Treatment": {"status": "Broken", "type": "Water", "population_affected": 8000, "criticality": "High"}
+    },
+    "crews": {
+        "Crew_Alpha": {"status": "Available", "specialty": "General"},
+        "Crew_Beta": {"status": "Available", "specialty": "Electrical"},
+        "Crew_Gamma": {"status": "Available", "specialty": "Water"},
+        "Crew_Delta": {"status": "Busy", "specialty": "General"}
+    }
+}

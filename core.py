@@ -1,29 +1,12 @@
-import json, time, os
+import json, time, os, sys, glob
 from datetime import datetime
 from enum import Enum
 from typing import List, Dict, Union
 import config
 import ollama
+from scenarios import jsonPicker
 
-# ==========================================
-# 1. MOCK ENVIRONMENT - ΕΠΕΚΤΕΤΑΣΜΕΝΟ
-# ==========================================
-WORLD_STATE = {
-    "nodes": {
-        "Node_Water_Pump_A": {"status": "Broken", "type": "Water", "population_affected": 5000, "criticality": "High"},
-        "Node_Server_B": {"status": "Operational", "type": "Internet", "population_affected": 200, "criticality": "Low"},
-        "Node_Power_Substation_C": {"status": "Broken", "type": "Power", "population_affected": 15000, "criticality": "Critical"},
-        "Node_Relay_D": {"status": "Operational", "type": "Telecom", "population_affected": 1000, "criticality": "Medium"},
-        "Node_Hospital_Generator": {"status": "Broken", "type": "Power", "population_affected": 3000, "criticality": "Critical"},
-        "Node_Water_Treatment": {"status": "Broken", "type": "Water", "population_affected": 8000, "criticality": "High"}
-    },
-    "crews": {
-        "Crew_Alpha": {"status": "Available", "specialty": "General"},
-        "Crew_Beta": {"status": "Available", "specialty": "Electrical"},
-        "Crew_Gamma": {"status": "Available", "specialty": "Water"},
-        "Crew_Delta": {"status": "Busy", "specialty": "General"}
-    }
-}
+WORLD_STATE = {}
 
 # ==========================================
 # 2. TOOLS
@@ -45,7 +28,7 @@ def assign_repair_crew(node_ids: List[str], crew_ids: List[str]) -> Dict[str, st
             results[f"{c}->{n}"] = f"Failed (Crew {crew_status})"
         else:
             WORLD_STATE["nodes"][n]["status"] = "Repairing"
-            WORLD_STATE["crews"][c]["status"] = "Busy"  # 🚨 Το crew γίνεται Busy!
+            WORLD_STATE["crews"][c]["status"] = "Busy"  # Το crew γίνεται Busy!
             results[f"{c}->{n}"] = "Success"
             print(f"  🛠️  Crew {c} is now BUSY repairing {n}")
     return results
@@ -81,26 +64,49 @@ class InfrastructureAgent:
         self.memory = {"context": {}, "history": []}
 
     def get_system_prompt(self, remaining_nodes=None):
-        base = """You are an Infrastructure Failure Management Agent.
-GOAL: Minimize social impact by repairing broken nodes.
+        base = """
+            You are an Infrastructure Failure Management Agent.
+            GOAL: Your primary objective is to EXECUTE REPAIRS. You must prioritize fixing nodes based on criticality (Critical > High > Medium > Low).
 
-IMPORTANT: When a crew is assigned to a node, it becomes BUSY and cannot be used again.
+            AVAILABLE TOOLS:
+            1. detect_failure_nodes() -> list: Returns broken node IDs.
+            2. estimate_impact(node_id: str) -> dict: Returns impact metrics.
+            3. assign_repair_crew(node_ids: list, crew_ids: list) -> dict: Assigns crews.
+            4. finalize() -> None: Ends the mission.
 
-STATE RULES:
-1. DETECT: Call detect_failure_nodes
-2. ANALYZE: Call estimate_impact ONCE per node
-3. PLAN: No tool calls (system creates plan based on available crews)
-4. ACT: Call assign_repair_crew
+            RESPONSE FORMAT:
+            You must respond with a JSON object containing:
+            - "thought": A brief reasoning for your action.
+            - "action": The name of the tool to call.
+            - "arguments": A dictionary of arguments for the tool.
 
-PRIORITY: Critical > High > Medium > Low (then by population)
+            PHASE INSTRUCTIONS:
+            - If phase is 'DETECT': Call detect_failure_nodes.
+            - If phase is 'ANALYZE': Call estimate_impact for a node.
+            - If phase is 'PLAN': Call assign_repair_crew.
+            - PRIORITY RULE: You MUST repair 'Critical' nodes before 'High', and 'High' before 'Low'.
+            - MATCHING RULE: 
+                - 'General' crews can fix ANY node.
+                - Specialized crews (e.g. 'Electrical') can only fix their specific type.
+                - NEVER assign a mismatched crew (e.g. 'Water' crew to 'Power' node).
 
-RESPONSE FORMAT (JSON ONLY):
-{
-  "thought": "reasoning",
-  "action": "tool_name",
-  "arguments": {}
-}
-"""
+            User Input: { "phase": "ANALYZE", "context": { "failures": ["Node_99"] } }
+            Model Response:
+            {
+            "thought": "I found a failure at Node_99. I need to check its impact.",
+            "action": "estimate_impact",
+            "arguments": { "node_id": "Node_99" }
+            }
+
+            User Input: { "phase": "PLAN", "context": { "impact_reports": [{"node_id": "Node_99", "criticality": "High"}] }, "available_crews": ["Crew_Alpha"] }
+            Model Response:
+            {
+            "thought": "Node_99 is High criticality. I will assign Crew_Alpha.",
+            "action": "assign_repair_crew",
+            "arguments": { "node_ids": ["Node_99"], "crew_ids": ["Crew_Alpha"] }
+            }
+            """
+        
         
         prompts = {
             AgentState.DETECT: "CURRENT STATE: DETECT\nACTION: detect_failure_nodes",
@@ -166,28 +172,22 @@ RESPONSE FORMAT (JSON ONLY):
             obs = detect_failure_nodes()
             self.memory["context"]["failures"] = obs
             self.state = AgentState.ANALYZE if obs else AgentState.FINAL
-            return f"Found {len(obs)} broken nodes: {obs}"
+            return obs
         
         # ANALYZE state
         elif self.state == AgentState.ANALYZE:
-            node_id = args.get("node_id")
+            # Optimization: Analyze ALL remaining nodes in one go to save steps
+            reports = []
+            for node_id in remaining:
+                if node_id in failures:
+                    obs = estimate_impact(node_id)
+                    reports.append(obs)
             
-            # Auto-correct if wrong action
-            if action != "estimate_impact" or not node_id:
-                node_id = remaining[0] if remaining else None
-            
-            if node_id and node_id in failures and node_id not in analyzed:
-                obs = estimate_impact(node_id)
-                self.memory["context"].setdefault("impact_reports", []).append(obs)
-                
-                # Check if all analyzed
-                new_analyzed = [r["node_id"] for r in self.memory["context"].get("impact_reports", [])]
-                if all(n in new_analyzed for n in failures):
-                    self.state = AgentState.PLAN
-                    return f"✅ All {len(failures)} nodes analyzed. Moving to PLAN"
-                return f"✅ Analyzed {node_id}: {obs['criticality']}, {obs['population_affected']} people"
-            else:
-                return f"❌ Cannot analyze {node_id}"
+            if reports:
+                self.memory["context"].setdefault("impact_reports", []).extend(reports)
+                self.state = AgentState.PLAN
+                return {"analyzed_nodes": [r["node_id"] for r in reports]}
+            return {"error": "No nodes to analyze"}
         
         # PLAN state
         elif self.state == AgentState.PLAN:
@@ -195,114 +195,97 @@ RESPONSE FORMAT (JSON ONLY):
             
             if not impacts:
                 self.state = AgentState.FINAL
-                return "No impacts to plan"
+                return {"error": "No impacts to plan"}
             
             # Sort by priority
             priority = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
             impacts.sort(key=lambda x: (priority[x["criticality"]], x["population_affected"]), reverse=True)
             
-            print(f"📊 PRIORITY LIST:")
-            for i, imp in enumerate(impacts):
-                print(f"  {i+1}. {imp['node_id']}: {imp['criticality']} ({imp['population_affected']} people)")
-            
-            # Create plan with available crews
+            # Smart Matching Logic
             plan = []
-            for i, imp in enumerate(impacts):
-                if i < len(available_crews):
-                    plan.append({"node": imp["node_id"], "crew": available_crews[i]})
-                else:
-                    print(f"  ⚠️  No crew for {imp['node_id']} ({len(available_crews)} crews available)")
+            used_crews = set()
+            crew_details = {c: WORLD_STATE["crews"][c] for c in available_crews}
+
+            for imp in impacts:
+                node_type = imp["type"]
+                candidates = []
+                
+                # Find compatible crews
+                for c_id, c_data in crew_details.items():
+                    if c_id not in used_crews:
+                        if c_data["specialty"] == node_type or c_data["specialty"] == "General":
+                            # Priority: Specific (0) > General (1)
+                            score = 0 if c_data["specialty"] == node_type else 1
+                            candidates.append((score, c_id))
+                
+                if candidates:
+                    candidates.sort() # Sort by score (Specific first)
+                    best_crew = candidates[0][1]
+                    plan.append({"node": imp["node_id"], "crew": best_crew})
+                    used_crews.add(best_crew)
             
             self.memory["context"]["repair_plan"] = plan
             
             if plan:
                 self.state = AgentState.ACT
-                return f"📋 Plan: {plan}"
+                return {"plan": plan}
             else:
                 self.state = AgentState.FINAL
-                return "❌ No available crews for repair"
+                return {"error": "No available crews for repair"}
         
         # ACT state
         elif self.state == AgentState.ACT:
             plan = self.memory["context"].get("repair_plan", [])
             
-            # Use plan from memory if LLM didn't provide proper args
-            if action != "assign_repair_crew" or not args.get("node_ids"):
-                node_ids = [p["node"] for p in plan]
-                crew_ids = [p["crew"] for p in plan]
-            else:
-                node_ids = args.get("node_ids", [])
-                crew_ids = args.get("crew_ids", [])
-            
-            print(f"🚀 EXECUTING REPAIR PLAN:")
-            for n, c in zip(node_ids, crew_ids):
-                print(f"  ▶️  Assigning {c} to repair {n}")
+            # Force execution of the calculated plan (ignore LLM args to avoid hallucinations)
+            node_ids = [p["node"] for p in plan]
+            crew_ids = [p["crew"] for p in plan]
             
             obs = assign_repair_crew(node_ids, crew_ids)
             self.state = AgentState.FINAL
             
-            # Check how many crews are now busy
-            busy_count = len([c for c, d in WORLD_STATE["crews"].items() if d["status"] == "Busy"])
-            return f"{obs} | {busy_count} crews now BUSY"
+            return obs
         
-        return "Invalid state"
+        return {"error": "Invalid state"}
 
     def run(self):
-        print(f"\n{'='*50}")
-        print("🏗️  INFRASTRUCTURE FAILURE MANAGEMENT AGENT")
-        print(f"{'='*50}")
-        
-        initial_broken = detect_failure_nodes()
-        initial_crews = check_crew_availability()
-        
-        print(f"\n📊 INITIAL STATUS:")
-        print(f"  Broken nodes: {len(initial_broken)} → {initial_broken}")
-        print(f"  Crew status: {initial_crews}")
-        print(f"  Available crews: {[c for c, s in initial_crews.items() if s == 'Available']}")
+        print("--- INFRASTRUCTURE AGENT STARTED ---")
+        self.state = AgentState.DETECT # Force Start State
         
         while self.state != AgentState.FINAL and self.step_count < self.max_steps:
             self.step()
-            time.sleep(0.5)
-        
-        # Final report
-        print(f"\n{'='*50}")
-        print("🏁 AGENT FINISHED")
-        print(f"{'='*50}")
-        
-        print(f"\n📈 FINAL NODE STATUS:")
-        for node, data in WORLD_STATE["nodes"].items():
-            icon = "🔧" if data["status"] == "Repairing" else "❌" if data["status"] == "Broken" else "✅"
-            print(f"  {icon} {node}: {data['status']} | {data['criticality']} | {data['population_affected']} people")
-        
-        print(f"\n👷 FINAL CREW STATUS:")
-        for crew, data in WORLD_STATE["crews"].items():
-            icon = "🛠️" if data["status"] == "Busy" else "✅" if data["status"] == "Available" else "⏸️"
-            print(f"  {icon} {crew}: {data['status']} ({data['specialty']})")
-        
-        # Statistics
-        repaired = [n for n, d in WORLD_STATE["nodes"].items() if d["status"] == "Repairing"]
-        busy_crews = [c for c, d in WORLD_STATE["crews"].items() if d["status"] == "Busy"]
-        
-        print(f"\n📊 SUMMARY:")
-        print(f"  ✅ Nodes being repaired: {len(repaired)}/{len(initial_broken)} → {repaired}")
-        print(f"  🛠️  Busy crews: {len(busy_crews)}/{len(WORLD_STATE['crews'])} → {busy_crews}")
-        
-        if repaired:
-            print(f"\n🎯 SUCCESS: {len(repaired)} repairs initiated!")
-        else:
-            print(f"\n⚠️  WARNING: No repairs initiated")
-        
-        # Save run
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = os.path.join(config.runs_path, f"run_{ts}.json")
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.memory, f, indent=2)
-        print(f"\n💾 Run saved: {path}")
+            time.sleep(1)
 
-# ==========================================
-# 5. MAIN
-# ==========================================
+        print("\n--- AGENT FINISHED ---")
+        print("Final World State (Check if nodes are Repairing):")
+        print(json.dumps(WORLD_STATE["nodes"], indent=2))
+        
+        # --- ΠΡΟΣΘΗΚΗ ΓΙΑ ΑΠΟΘΗΚΕΥΣΗ LOGS ---
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Αν δεν έχεις το config.runs_path, βάλε απλά "run_" + ts + ".json"
+        log_filename = f"run_log_{ts}.json" 
+        with open(log_filename, "w", encoding="utf-8") as f:
+            # Αποθηκεύει όλη τη μνήμη και το ιστορικό του Agent
+            json.dump(self.memory, f, indent=2, ensure_ascii=False)
+        print(f"\n Το Log αποθηκεύτηκε στο αρχείο: {log_filename}")
+
 if __name__ == "__main__":
-    print("🚀 Starting Infrastructure Agent...")
-    agent = InfrastructureAgent(max_steps=15)
-    agent.run()
+    # Find all scenario files in the scenarios directory
+    scenario_files = jsonPicker.get_available_scenarios()
+
+    print(f"Found {len(scenario_files)} scenarios to run.")
+    print(f"[CORE] Found {len(scenario_files)} scenarios to run.")
+
+    for scenario_path in scenario_files:
+        scenario_name = os.path.basename(scenario_path)
+        print(f"\n{'#'*50}\nRUNNING SCENARIO: {scenario_name}\n{'#'*50}")
+        print(f"\n{'#'*50}\n[CORE] RUNNING SCENARIO: {scenario_name}\n{'#'*50}")
+        
+        # Load scenario into WORLD_STATE
+        WORLD_STATE.clear()
+        WORLD_STATE.update(jsonPicker.load_world_state(scenario_path))
+        
+        print("Starting Infrastructure Agent...")
+        print("[CORE] Starting Infrastructure Agent...")
+        agent = InfrastructureAgent(max_steps=15)
+        agent.run()        
