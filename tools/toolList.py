@@ -1,4 +1,5 @@
 from typing import Dict, Union, List
+import random
 from config import WORLD_STATE
 
 def detect_failure_nodes() -> List[str]:
@@ -49,8 +50,10 @@ def assign_repair_crew(node_ids: List[str], crew_ids: List[str]) -> Dict[str, st
         else:
             WORLD_STATE["nodes"][n]["status"] = "Repairing"
             WORLD_STATE["crews"][c]["status"] = "Busy"  # Το crew γίνεται Busy!
-            results[f"{c}->{n}"] = "Success"
-            print(f"Crew {c} is now BUSY repairing {n}")
+            # Υπολογισμός διάρκειας επισκευής (π.χ. 60-240 λεπτά)
+            duration = random.randint(60, 240)
+            results[f"{c}->{n}"] = f"Success (Duration: {duration} mins)"
+            print(f"Crew {c} is now BUSY repairing {n} (Duration: {duration} mins)")
     return results
 
 def check_crew_availability() -> Dict[str, str]:
