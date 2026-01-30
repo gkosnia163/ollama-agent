@@ -5,22 +5,22 @@ import importlib.util
 import os
 import sys
 
-VERBOSE = True
+VERBOSE = False
 
 # --- CLOUD CONFIGURATION ---
-USE_CLOUD = True  # Αν είναι True, το Ollama αγνοείται πλήρως
+USE_CLOUD = True # True = groq api | False = Ollama - local
 CLOUD_PROVIDER = "groq"  # 'groq' ή 'openai'
 CLOUD_API_KEY = "" #βάλτε το δικό σας API key apo https://console.groq.com -> φτιάξε account -> φτιάξε key βάλτο εδώ (συνήθως ξεκινάει με gsk_)
-                   #τον νου με την επιλογή μοντέλων μην πληρώσουμε
-CLOUD_MODEL = "llama-3.3-70b-versatile"
+CLOUD_MODEL = "openai/gpt-oss-120b"
 
+VERBOSE = True
 
 if __name__ == '__main__':
     if VERBOSE: print(f"[CONFIG] downlods probably get sent: {os.getcwd()}")
 
 seed = "1407931694"
 assigned_domain = "Infrastructure Failure Management Agent"
-base_path = r"/Users/kostasniafas/Library/CloudStorage/GoogleDrive-dit21140@go.uop.gr/My Drive/Agent"
+base_path = r""
 runs_path = os.path.join(base_path, "runs")
 
 # Δημιουργία φακέλου runs (και του base_path αν λείπει)
@@ -71,9 +71,9 @@ if not USE_CLOUD:
 
     # ΚΑΤΕΒΑΣΜΑ ΜΟΝΤΕΛΟΥ
     result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
-    if "llama3.2:latest" not in result.stdout:
-        if VERBOSE: print("[CONFIG] Το μοντέλο llama3.2:latest δεν βρέθηκε. Κατέβασμα...")
-        subprocess.run(["ollama", "pull", "llama3.2:latest"], check=True)
+    if "lfm2.5-thinking:1.2b" not in result.stdout:
+        if VERBOSE: print("[CONFIG] Το μοντέλο lfm2.5-thinking:1.2b δεν βρέθηκε. Κατέβασμα...")
+        subprocess.run(["ollama", "pull", "lfm2.5-thinking:1.2b"], check=True)
 
     # ΕΓΚΑΤΑΣΤΑΣΗ ΒΙΒΛΙΟΘΗΚΗΣ PYTHON OLLAMA
     if importlib.util.find_spec("ollama") is None:

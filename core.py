@@ -14,8 +14,9 @@ def llm_call(system_prompt: str, user_context: str) -> Dict:
     try:
         if config.USE_CLOUD:
             import openai
-            # Ρύθμιση Client ανάλογα με τον provider
-            base_url = "https://api.groq.com/openai/v1" if config.CLOUD_PROVIDER == "groq" else None
+            #κάνουμε import openai όχι γιατί χρησιμοποιούμε τα μοντέλα τους αλλά χρησιμοποιούμε το python client τους, για να εισάγουμε api key απο το groq
+            #overiding base url
+            base_url = "https://api.groq.com/openai/v1" if config.CLOUD_PROVIDER == "groq" else None #σύμφωνα με τα groq docs, για να κάνεις create chat completion χρησιμοποιείς το link
             client = openai.OpenAI(api_key=config.CLOUD_API_KEY, base_url=base_url)
             
             response = client.chat.completions.create(
@@ -37,7 +38,7 @@ def llm_call(system_prompt: str, user_context: str) -> Dict:
         else:
             # Local Ollama fallback
             import ollama
-            response = ollama.chat(model="llama3.2:latest", messages=[
+            response = ollama.chat(model="lfm2.5-thinking:1.2b", messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_context}
             ], format="json", options={"temperature": 0.1})
@@ -74,7 +75,7 @@ class InfrastructureAgent:
             - You must match available crews to nodes. 
             - 'General' crews can fix anything. Specialized crews only fix their type.
             - Prioritize 'Critical' nodes over 'High/Medium/Low'.
-            - If two or multiple nodes are broken, prioritize fixing the node with the most population 
+            - CRITICAL PRIORITY: If multiple nodes are broken, you MUST compare their population. ALWAYS prioritize fixing the node with the HIGHEST population first.
 
             RESPONSE FORMAT:
             You must respond ONLY with a valid JSON object containing:
@@ -102,7 +103,7 @@ class InfrastructureAgent:
         available_crews = [c for c, d in config.WORLD_STATE["crews"].items() if d["status"] == "Available"]
         failures = self.memory["context"].get("failures", [])
         analyzed_reports = self.memory["context"].get("impact_reports", [])
-        analyzed_ids = [r["node_id"] for r in analyzed_reports]
+        analyzed_ids = [r["node_id"] for r in analyzed_reports if "node_id" in r]
         remaining_to_analyze = [n for n in failures if n not in analyzed_ids]
         
         # Dynamic instructions in context to force action
@@ -183,7 +184,7 @@ class InfrastructureAgent:
 
     def run(self):
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"run_log_{ts}.txt"
+        log_filename = os.path.join(config.runs_path, f"run_log_{ts}.txt")
 
         class DualLogger:
             def __init__(self, filepath):
