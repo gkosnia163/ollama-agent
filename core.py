@@ -38,7 +38,7 @@ def llm_call(system_prompt: str, user_context: str) -> Dict:
         else:
             # Local Ollama fallback
             import ollama
-            response = ollama.chat(model="lfm2.5-thinking:1.2b", messages=[
+            response = ollama.chat(model="granite4:3b", messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_context}
             ], format="json", options={"temperature": 0.1})

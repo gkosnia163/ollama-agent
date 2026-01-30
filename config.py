@@ -4,16 +4,26 @@ import shutil
 import importlib.util
 import os
 import sys
+import json
 
-VERBOSE = False
+VERBOSE = True
 
-# --- CLOUD CONFIGURATION ---
-USE_CLOUD = True # True = groq api | False = Ollama - local
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "llm_config.json")
+
+if os.path.exists(CONFIG_FILE) and __name__ != "__main__":
+    with open(CONFIG_FILE, 'r') as f:
+        USE_CLOUD = json.load(f).get("use_cloud", False)
+else:
+    if VERBOSE: cloud = input("Do you want to use Cloud LLM [y/n]: ")
+    USE_CLOUD = (cloud.lower() == 'y') if VERBOSE else False
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump({"use_cloud": USE_CLOUD}, f)
+
+# True = groq api | False = Ollama - local
+if VERBOSE: print(f"[CONFIG] Cloud enabled: {USE_CLOUD}")
 CLOUD_PROVIDER = "groq"  # 'groq' ή 'openai'
 CLOUD_API_KEY = "" #βάλτε το δικό σας API key apo https://console.groq.com -> φτιάξε account -> φτιάξε key βάλτο εδώ (συνήθως ξεκινάει με gsk_)
 CLOUD_MODEL = "openai/gpt-oss-120b"
-
-VERBOSE = True
 
 if __name__ == '__main__':
     if VERBOSE: print(f"[CONFIG] downlods probably get sent: {os.getcwd()}")
@@ -71,9 +81,9 @@ if not USE_CLOUD:
 
     # ΚΑΤΕΒΑΣΜΑ ΜΟΝΤΕΛΟΥ
     result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
-    if "lfm2.5-thinking:1.2b" not in result.stdout:
-        if VERBOSE: print("[CONFIG] Το μοντέλο lfm2.5-thinking:1.2b δεν βρέθηκε. Κατέβασμα...")
-        subprocess.run(["ollama", "pull", "lfm2.5-thinking:1.2b"], check=True)
+    if "granite4:3b" not in result.stdout:
+        if VERBOSE: print("[CONFIG] Το μοντέλο granite4:3b δεν βρέθηκε. Κατέβασμα...")
+        subprocess.run(["ollama", "pull", "granite4:3b"], check=True)
 
     # ΕΓΚΑΤΑΣΤΑΣΗ ΒΙΒΛΙΟΘΗΚΗΣ PYTHON OLLAMA
     if importlib.util.find_spec("ollama") is None:
